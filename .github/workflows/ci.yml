@@ -14,5 +14,7 @@ jobs:
         run: python -m py_compile src/*.py tests/*.py
       - name: Smoke tests
         run: python -m pytest -q
+      - name: Download dataset
+        run: python data/download_dataset.py
       - name: Reproduce (sanity run)
         run: python -m src.train --config config.yaml
