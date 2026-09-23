@@ -40,9 +40,9 @@ trains and evaluates. No manual data download step is required.
 
 ## Claimed results
 State the headline numbers you report in the paper (must match `results/metrics.json`):
-- Accuracy: 0.8911
-- Precision / Recall / F1: 0.9454 / 0.9100 / 0.9274
-- ROC-AUC: 0.9552
+- Accuracy: 0.8879
+- Precision / Recall / F1: 0.9709 / 0.8796 / 0.9230
+- ROC-AUC: 0.9555
 
 ## Report
 See `report\CSEC_520___Cyber_Analytics___ML___Project_1___Willis_Martin.pdf`.
