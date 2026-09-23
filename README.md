@@ -100,7 +100,7 @@ source, and download instructions (`python data/download_dataset.py`).
 - [x] Results (`results/`) match what your report claims
 - [x] Evaluation reports precision / recall / F1 / ROC-AUC, not just accuracy
 - [x] No data leakage (scaling/fitting on train only)
-- [ ] Report in IEEE format (`report/`), code referenced in the appendix
+- [x] Report in IEEE format (`report/`), code referenced in the appendix
 - [x] Team members and contributions listed below
 
 ## Team
