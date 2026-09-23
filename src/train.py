@@ -36,17 +36,31 @@ def main(config_path: str):
                 dropout=cfg["model"]["dropout"]).to(device)
     opt = torch.optim.Adam(model.parameters(), lr=cfg["train"]["lr"],
                            weight_decay=cfg["train"]["weight_decay"])
-    loss_fn = nn.CrossEntropyLoss()
+
+    use_class_weights = cfg["train"].get("use_class_weights", True)
+    if use_class_weights:
+        class_counts = np.bincount(y_tr)
+        class_weights = len(y_tr) / (len(class_counts) * class_counts)
+        class_weights = torch.tensor(class_weights, dtype=torch.float32, device=device)
+        loss_fn = nn.CrossEntropyLoss(weight=class_weights)
+    else:
+        loss_fn = nn.CrossEntropyLoss()
+
     bs = cfg["train"]["batch_size"]
 
     model.train()
     for epoch in range(cfg["train"]["epochs"]):
         perm = torch.randperm(Xtr.size(0))
+        epoch_loss = 0.0
+        n_batches = 0
         for i in range(0, Xtr.size(0), bs):
             idx = perm[i:i + bs]
             opt.zero_grad()
             loss = loss_fn(model(Xtr[idx]), ytr[idx])
             loss.backward(); opt.step()
+            epoch_loss += loss.item()
+            n_batches += 1
+        print(f"Epoch {epoch+1}/{cfg['train']['epochs']} - avg loss: {epoch_loss/n_batches:.4f}")
 
     model.eval()
     with torch.no_grad():

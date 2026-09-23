@@ -1,0 +1,154 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+\usepackage{url}
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+\begin{document}
+
+\title{Binary Intrusion Detection on the CICIoT2023 Dataset Using a Deep Neural Network}
+
+\author{\IEEEauthorblockN{Willis Martin}
+\IEEEauthorblockA{\textit{Department of Cybersecurity} \\
+\textit{Rochester Institute of Technology}\\
+Rochester, NY, USA \\
+wrm3207@rit.edu}
+}
+
+\maketitle
+
+\begin{abstract}
+This project implements a deep neural network for binary intrusion detection using a subset of the CICIoT2023 IoT network traffic dataset, classifying traffic as either benign or malicious. We assembled a dataset of 1,535,085 flows from pre-tagged CSV files across CICIoT2023 attack classes. We accounted for class imbalance using capped sampling. We tuned the model's architecture, learning rate, and loss-weighting strategy through repeated runs. The final model reached 89.1\% accuracy and an F1-score of 0.927. However, this falls short of the 98-99\% accuracy reported in the CICIoT2023 benchmarks.
+\end{abstract}
+
+\begin{IEEEkeywords}
+intrusion detection, deep neural network, IoT security, CICIoT2023
+\end{IEEEkeywords}
+
+\section{Introduction}
+As more IoT devices become part of daily life, they present a growing attack surface. As a result, IoT network traffic needs fast, reliable detection. This project trained and evaluated a DNN classifier on the CICIoT2023 dataset \cite{s23135941} to classify network flows as either benign or malicious. This project followed standard practice for train/test separation, leakage-free scaling, and class-imbalance handling. We compare results with the paper's reported binary classification benchmarks.
+
+
+
+\section{Literature Review}
+CICIoT2023 \cite{s23135941} is a labeled IoT network traffic dataset covering 33 attacks across seven categories, collected from real IoT devices in a synthetic environment. Each flow has 47 features extracted via CICFlowMeter, including protocol information, packet timing, and statistical flow characteristics. The paper reports reaching accuracy and F1-scores generally above 98\% in binary classification across several tested models, using the dataset's full feature set and full row count.
+
+A subsequent survey by Salman and Yong \cite{salman2025overview} reviewed the CICIoT2023 dataset's structure and applications, noting its adoption as a baseline for binary and multi-class classification studies. They pointed out the dataset's size as a strength for realistic evaluation but a choke point for reproducibility with limited resources.
+
+\section{Implementation}
+
+\subsection{Dataset}
+I created a binary-classification subset using the CICIoT2023's per-category CSV files \cite{s23135941}. I retrieved the exact files from the Canadian Institute for Cybersecurity. Rather than using the full 40m row dataset, only one file was selected per attack category to cover all seven of the paper's attack classes: DDoS, DoS, Reconnaissance, Web-based, Brute Force, Spoofing, and Mirai, combined with the benign traffic. This approach keeps the dataset reduced whilst preserving representation covering all major attack categories. We capped each category to stop any single high-volume category from flooding the dataset.
+
+The paper's dataset had a 40:1 malicious-to-benign imbalance. To reduce this to a manageable ratio, the malicious CSV file was capped at 150,000 randomly selected rows using a set seed of 42. For the few cases where a category had fewer than 150,000 rows, we used all rows. After selection, we dropped all rows that contained infinite or NaN values; these typically came from ratio-related features with near-zero duration. In the end, the final dataset contained 1,535,085 rows, with an approximate 1:3.2 ratio. However, I couldn't find a reason for this: the downloaded files contained only 39 numeric features, while the paper reported 47; I used all 39 features as-is.
+
+\subsection{Model}
+A PyTorch multilayer perceptron with two hidden layers containing 128 and 64 units, respectively, ReLU activations, and dropout p = 0.1. The two-unit output layer was trained with Adam (learning rate 0.001, weight decay 0.0001) over 30 epochs, with a batch size of 64. Features were standardized using training-split statistics only, with an 80/20 train/test split.
+
+\subsection{Hyperparameter Tuning}
+We compared architecture size across four variants (64 to 256 hidden units in two to three layers), learning rates of 0.001 vs. 0.003, and unweighted or class-weighted loss over a ten-run pass (Table \ref{tab:sweep}). The top performer used unweighted loss, the 128 and 64 architectures, and a learning rate of 0.001. Comparing all runs shows that larger architectures provided negligible improvement, and all runs using a learning rate of 0.003 performed worse than those using 0.001. Additionally, class weights underperformed at this architecture and were consistently worse than the unweighted model, reducing recall from 0.918 to 0.832. This is likely because we reduced the dataset imbalance to 1:3.2 compared to the base 1:40 imbalance, removing the need to correct it with inverse-frequency weighting.
+
+\begin{table}[htbp]
+\caption{Hyperparameter Sweep Results (10 epochs, unweighted loss)}
+\begin{center}
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Architecture (lr)} & \textbf{Recall} & \textbf{F1} & \textbf{AUC} \\
+\hline
+[128,64] (0.001)     & 0.918 & 0.929 & 0.956 \\
+\hline
+[256,128,64] (0.001) & 0.915 & 0.928 & 0.956 \\
+\hline
+[256,128] (0.001)    & 0.910 & 0.927 & 0.955 \\
+\hline
+[64,64] (0.001)      & 0.906 & 0.927 & 0.955 \\
+\hline
+[128,64,32] (0.001)  & 0.897 & 0.926 & 0.956 \\
+\hline
+[128,64,32] (0.003)  & 0.876 & 0.918 & 0.950 \\
+\hline
+\end{tabular}
+\label{tab:sweep}
+\end{center}
+\end{table}
+
+The weighting scheme assigned a weight of 2.12 to the benign class and 0.65 to the malicious class, pushing the model to under-predict the majority class more than the imbalance required. This suggests that class weighting, while typically used for severe imbalance, can be counterproductive on datasets with more moderate imbalance and is worth testing on a case-by-case basis rather than applying by default.
+
+\begin{table}[htbp]
+\caption{Effect of Class Weighting ([128,64], 30 epochs)}
+\begin{center}
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Loss} & \textbf{Precision} & \textbf{Recall} & \textbf{F1} \\
+\hline
+Weighted   & 0.992 & 0.832 & 0.905 \\
+\hline
+Unweighted & 0.945 & 0.910 & 0.927 \\
+\hline
+\end{tabular}
+\label{tab:weighting}
+\end{center}
+\end{table}
+
+\section{Results and Discussion}
+Final performance on the held-out test set, using the selected configuration (hidden sizes [128, 64], unweighted loss, 30 epochs), is summarized in this Table \ref{tab:metrics}. 
+
+\begin{table}[htbp]
+\caption{Final Model Performance}
+\begin{center}
+\begin{tabular}{|l|c|}
+\hline
+\textbf{Metric} & \textbf{Value} \\
+\hline
+Accuracy  & 0.8911 \\
+\hline
+Precision & 0.9454 \\
+\hline
+Recall    & 0.9100 \\
+\hline
+F1-Score  & 0.9274 \\
+\hline
+ROC-AUC   & 0.9552 \\
+\hline
+\end{tabular}
+\label{tab:metrics}
+\end{center}
+\end{table}
+
+\begin{figure}[htbp]
+\centerline{\includegraphics[width=2.2in]{confusion_matrix.png}}
+\caption{Confusion matrix on the held-out test set.}
+\label{fig:cm}
+\end{figure}
+\begin{figure}[htbp]
+\centerline{\includegraphics[width=2.2in]{roc_curve.png}}
+\caption{ROC curve on the held-out test set.}
+\label{fig:roc}
+\end{figure}
+
+The confusion matrix (Fig.~\ref{fig:cm}) shows the distribution of correct and incorrect predictions across both classes.
+
+The model shows a modest precision-recall trade-off: precision is 0.945 and recall is 0.910. It usually flags malicious traffic correctly. However, it misses roughly 9\% of the actual malicious flows. For intrusion detection, this trade-off matters: missing malicious flows is worse than falsely flagging benign traffic flows.
+
+The CICIoT2023 paper reported binary classification of approximately 98-99\% across accuracy, precision, recall, and F1. Multiple reasons explain why our model performed notably worse than the one in the paper. One major reason is the feature set: our dataset had access to only 39 features compared to the 47 features reported, meaning we are working with nearly 20\% fewer features. Second, for performance reasons, we trained our model on a capped, subsampled dataset rather than the full dataset. Lastly, our model used a simple two-layer architecture, while the top performers in the study likely used significantly larger models.
+
+\subsection{Limitations}
+This study suffered from multiple limitations. First, the initial data available contained only 39 features, compared with the initial studies' 47. Next, for performance reasons, the training dataset was reduced substantially. Additionally, the hyperparameter sweep used to test configuration changes was limited to 10 epochs, compared with the full 30 epochs used to train the best-performing configuration. However, some small counterargument against 10 epochs being a limitation is that the final 30-epoch run showed marginally lower recall and F1 (0.905, 0.928) than the same configuration's 10-epoch sweep result (0.918, 0.929), suggesting the model had already converged near its generalization peak by epoch 10, and further training provided no benefit, potentially with mild overfitting. While the results in Section IV show that this reduced proxy testing was reasonably consistent, independent verification at 30 epochs was not performed. Additionally, the dropout value of 0.1 and weight decay value of 0.0001 were not altered in this sweep. This sweep used a single train/test split instead of cross-validation; as a result, these metrics reflect one random sample of the larger dataset rather than multiple samples.
+
+
+\section{Conclusion}
+Our two-layer DNN achieved a 0.927 F1 score using a subsampled CICIoT2023 binary classification task. While this is below the paper's 98-99\% benchmark, this is attributable to a reduced feature set and dataset scope. Systematic tuning confirmed that unweighted loss and moderate architecture sizes of 128 and 64 were optimal among all tested configurations. Additionally, class-weighted loss and larger architectures both produced worse results than their alternatives. The key lesson I took away was that class-weighting, while typically recommended for imbalanced classifications, is not universally beneficial. Empirical testing against unweighted baselines was required rather than applying weighting by default. Another observation was that repeated training runs with the same fixed seed and configuration produced small variations in reported metric differences on the order of 0.001-0.002 across separate executions, particularly on CPU. This is consistent with minor nondeterminism in multi-threaded execution rather than a flaw in the training procedure. It underscores that a single run's metrics should be interpreted with some tolerance rather than treated as an exact reproducible value. Future work includes comparing our model to a model that incorporates the full feature set, uses the entire dataset, and testing results using 8-class and 34-class classification tasks benchmarked in the cited paper.
+
+\section*{Appendix}
+Code repository: https://github.com/ZeroZer-0/csec-520-620-p1-wrm3207.
+Reproducible via make reproduce (see repository README).
+
+\bibliographystyle{vancouver}
+\bibliography{refrences}
+
+\end{document}

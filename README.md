@@ -20,14 +20,15 @@ source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 # (or just: make setup)
 
-# 2. Reproduce results  <-- this is the grading command
-make reproduce        # == python -m src.train --config config.yaml
+# 2. Get the dataset
+python data/download_dataset.py
+
+# 3. Reproduce results  <-- this is the grading command
+make reproduce 
 ```
 
 `make reproduce` trains the model and writes to `results/`:
 `metrics.json`, `confusion_matrix.png`, `roc_curve.png`, and `model.pt`.
-
-The template ships with a **synthetic dataset**, so it runs before you add real data.
 
 ### Using Keras
 
@@ -69,6 +70,7 @@ os.environ["KERAS_BACKEND"] = "torch"
 └── .github/workflows/  # CI: lint + tests + a sanity reproduce run
 ```
 
+
 ## Grading (by an AI agent or a human)
 
 This repo is designed to be graded by an agent. See `grading/`:
@@ -89,19 +91,23 @@ looks clean.
 2. Set `data.source: csv` and `data.csv_path` in `config.yaml`.
 3. `make reproduce`.
 
+This project uses CICIoT2023; see `data/README.md` for the full dataset
+source, and download instructions (`python data/download_dataset.py`).
+
 ## Requirements checklist (per the project handout)
 
-- [ ] `make reproduce` runs clean from a fresh environment
-- [ ] Results (`results/`) match what your report claims
-- [ ] Evaluation reports precision / recall / F1 / ROC-AUC, not just accuracy
-- [ ] No data leakage (scaling/fitting on train only)
+- [x] `make reproduce` runs clean from a fresh environment
+- [x] Results (`results/`) match what your report claims
+- [x] Evaluation reports precision / recall / F1 / ROC-AUC, not just accuracy
+- [x] No data leakage (scaling/fitting on train only)
 - [ ] Report in IEEE format (`report/`), code referenced in the appendix
-- [ ] Team members and contributions listed below
+- [x] Team members and contributions listed below
 
 ## Team
 
-- Name (RIT ID) — contributions
-- Name (RIT ID) — contributions
+- Willis Martin (RIT ID: wrm3207@rit.edu) - sole contributor: dataset
+  assembly, model implementation, hyperparameter tuning, evaluation, and
+  report.
 
 ## Academic integrity & AI use
 

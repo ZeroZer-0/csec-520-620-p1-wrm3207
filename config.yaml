@@ -1,16 +1,11 @@
-# Experiment configuration — edit this, not the code, to change a run.
 seed: 42
-
 data:
-  source: synthetic        # "synthetic" (default) or "csv"
+  source: csv
   csv_path: data/dataset.csv
-  target: label            # target column name when source == csv
-  n_samples: 2000          # synthetic only
-  n_features: 20           # synthetic only
+  target: Label
   test_size: 0.2
-
 model:
-  hidden_sizes: [64, 32]
+  hidden_sizes: [128, 64]
   dropout: 0.1
 
 train:
@@ -18,6 +13,6 @@ train:
   batch_size: 64
   lr: 0.001
   weight_decay: 0.0001
-
+  use_class_weights: false
 output:
   dir: results

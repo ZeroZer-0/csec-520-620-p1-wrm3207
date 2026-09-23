@@ -9,3 +9,4 @@ pyyaml
 torch
 keras           # Keras 3 — run it on the existing PyTorch backend (KERAS_BACKEND=torch)
 pytest
+gdown

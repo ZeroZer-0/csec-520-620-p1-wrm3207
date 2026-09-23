@@ -1,12 +1,13 @@
 # One-command reproducibility. Run `make help` to see targets.
 # Uses a plain Python venv + pip (no conda).
-.PHONY: help setup reproduce test lint clean
+.PHONY: help setup data reproduce test lint clean
 
 VENV := .venv
 PY := $(VENV)/bin/python
 
 help:
 	@echo "make setup      - create .venv and install requirements"
+	@echo "make data       - download the assembled dataset into data/"
 	@echo "make reproduce  - train + evaluate, writing results/ (THE grading command)"
 	@echo "make test       - run smoke tests"
 	@echo "make lint       - byte-compile check (stdlib only)"
@@ -17,8 +18,11 @@ setup:
 	$(PY) -m pip install --upgrade pip
 	$(PY) -m pip install -r requirements.txt
 
+data:
+	$(PY) data/download_dataset.py
+
 # The single command a grader runs. Must recreate your reported results.
-reproduce:
+reproduce: data
 	$(PY) -m src.train --config config.yaml
 
 test:
