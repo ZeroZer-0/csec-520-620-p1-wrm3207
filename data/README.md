@@ -32,8 +32,12 @@ assembled dataset (`dataset.csv`) has been made available separately see
 
 ## Files used
 
-Only the main unparted  CSV file was downloaded per category (not all 33+ attack
-subtypes):
+The benign file and 13 attack files were downloaded, the main unparted CSV for each.
+That covers six of the dataset's seven attack categories. **No DoS file was
+downloaded**, so the DoS category and 20 of the 33 attack types in Table 3 of the
+paper are absent. Several files are also only part of the paper's row counts
+(for example ICMP flood 268,010 vs 7,200,504 and benign 362,361 vs 1,098,195);
+brute force, OS scan, port scan, SQL injection and XSS match the paper.
 
 | File | Rows (raw) | Category |
 |---|---|---|
@@ -42,7 +46,7 @@ subtypes):
 | DDoS-SYN_Flood.pcap.csv | 266,024 | DDoS |
 | DDoS-TCP_Flood.pcap.csv | 265,776 | DDoS |
 | DDoS-UDP_Flood.pcap.csv | 266,605 | DDoS |
-| DictionaryBruteForce.pcap.csv | 13,064 | Brute Force |
+| DictionaryBruteForce.pcap.csv | 13,064 | Brute force |
 | DNS_Spoofing.pcap.csv | 178,898 | Spoofing |
 | Mirai-greeth_flood.pcap.csv | 33,597 | Mirai |
 | Mirai-udpplain.pcap.csv | 36,481 | Mirai |
@@ -52,30 +56,48 @@ subtypes):
 | SqlInjection.pcap.csv | 5,245 | Web-based |
 | XSS.pcap.csv | 3,846 | Web-based |
 
+The table has 39 numeric features. Against the 46 non-timestamp features in Table 4
+of the paper, flow_duration, Srate, Drate, urg_count, Magnitue, Radius, Covariance
+and Weight are missing and an IGMP indicator is present. I did not investigate why.
+
 ## Assembly
 
-`data/build_dataset.py` combines these files into a single binary
-(benign vs. malicious) dataset:
+`python data/build_dataset.py [--data-dir DIR] [--out-dir DIR]` combines the files
+into a binary (benign vs malicious) dataset. It raises an error if any declared
+input file is missing and exits non-zero if the result does not match the pinned
+SHA-256.
 
-1. All benign rows are kept and labeled `0`.
-2. Each malicious file is capped at 150,000 rows (random sample, seed=42) to
-   prevent the largest attack categories from being overly baised twords.
-   Any files under the cap are used in full. This avoids the unbalanced malicous:benign ratio built into the dataset (40:1) while keeping a usable ratio.
-3. Any row that contains infinite or NaN values (from ratio-based features such
-   as flow rate on near-zero-duration flows) are dropped.
-4. All malicious rows are labeled `1`, then concatenated with benign, and lastly shuffled
-   (seed=42), before being written to `data/dataset.csv`.
+1. All benign rows are kept and labelled `0`.
+2. Each malicious file is capped at 150,000 randomly chosen rows (seed 42). The
+   cap is per file, not per category. Only six files exceed it (four DDoS floods,
+   DNS spoofing, ARP spoofing); the rest are used in full.
+3. Rows with infinite or missing values (52) are dropped.
+4. Malicious rows are labelled `1`, concatenated with benign, shuffled (seed 42)
+   and written with CRLF line endings.
+5. A sidecar `data/dataset_sources.csv` records the source file and family of each
+   row (git-ignored). It is used for per-source analysis only, never as a feature.
 
-Resulting dataset: 1,535,085 rows - 362,342 benign / 1,172,743 malicious (~1:3.2 ratio).
+Result: 1,535,085 rows, 362,342 benign and 1,172,743 malicious (about 1:3.2).
+Repeated feature vectors are common (see `report/evidence/duplicate_audit.csv`),
+which is why the project splits by feature vector.
+
+## Pinned identity
+
+`data/dataset.sha256` holds the SHA-256 of the expected `dataset.csv`:
+`4b24f7311f790014f83ecdd80a1b7312e87275d3b181e3f8c483796dfc2d7d39`.
+`config.yaml` (`data.sha256`) makes `src/data.py` check it on every load, and the
+downloader checks it before and after downloading. An existing file with another
+hash is an error (`--force` re-downloads).
 
 # Reproducing
 
-1. Run `python data/download_dataset.py` downloads the pre-assembled `data/dataset.csv`
-   from the google drive linked in that script. 
-2. `config.yaml` is already set to `data.source: csv`,
-   `data.csv_path: data/dataset.csv`, `data.target: Label`.
+1. `python data/download_dataset.py` downloads the pre-assembled `data/dataset.csv`
+   from the Google Drive link in that script and verifies the hash.
+2. `config.yaml` has `data.source: csv`, `data.csv_path: data/dataset.csv`, `data.target: Label`.
 3. `make reproduce`.
 
-Due to the download constraints mentioned above a proper scirpt that downloads the source files and creates the dataset could not be made. To rectafy this I have uploaded the end product to the mentioned google drive and included download_dataset.py to download that data directly. However if you wish to do it properly or simply want to verify this dataset.csv can also be created following the files used and assembly steps provided. 
+The CIC server needs an access form and blocks scripted downloads, so the source
+files cannot be fetched automatically. Anyone with the 14 raw files can run
+`data/build_dataset.py` and will get a byte-identical `dataset.csv`.
 
 Raw per-category files and `dataset.csv` are git-ignored and not committed.

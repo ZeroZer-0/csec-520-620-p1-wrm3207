@@ -1,29 +1,33 @@
-import numpy as np
-import pandas as pd
+import argparse
+import sys
 from pathlib import Path
 
-DATA_DIR = Path(__file__).parent
-OUTPUT_PATH = DATA_DIR / "dataset.csv"
+import numpy as np
+import pandas as pd
 
-SEED = 42 # Used to provide both randomness in selection while being reproducable
-MAX_ROWS_PER_MALICIOUS_FILE = 150_000 # Caps large attack categories to keep the malicious:benign ratio low
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent))
+from src.integrity import read_pinned, sha256_file  # noqa: E402
+
+SEED = 42  
+MAX_ROWS_PER_MALICIOUS_FILE = 150_000  
 BENIGN_FILE = "BenignTraffic.pcap.csv"
-
-MALICIOUS_FILES = [
-    "DDoS-ICMP_Flood.pcap.csv",
-    "DDoS-SYN_Flood.pcap.csv",
-    "DDoS-TCP_Flood.pcap.csv",
-    "DDoS-UDP_Flood.pcap.csv",
-    "DictionaryBruteForce.pcap.csv",
-    "DNS_Spoofing.pcap.csv",
-    "Mirai-greeth_flood.pcap.csv",
-    "Mirai-udpplain.pcap.csv",
-    "MITM-ArpSpoofing.pcap.csv",
-    "Recon-OSScan.pcap.csv",
-    "Recon-PortScan.pcap.csv",
-    "SqlInjection.pcap.csv",
-    "XSS.pcap.csv",
-]
+MALICIOUS_FILES = {
+    "DDoS-ICMP_Flood.pcap.csv": "DDoS",
+    "DDoS-SYN_Flood.pcap.csv": "DDoS",
+    "DDoS-TCP_Flood.pcap.csv": "DDoS",
+    "DDoS-UDP_Flood.pcap.csv": "DDoS",
+    "DictionaryBruteForce.pcap.csv": "Brute Force",
+    "DNS_Spoofing.pcap.csv": "Spoofing",
+    "Mirai-greeth_flood.pcap.csv": "Mirai",
+    "Mirai-udpplain.pcap.csv": "Mirai",
+    "MITM-ArpSpoofing.pcap.csv": "Spoofing",
+    "Recon-OSScan.pcap.csv": "Recon",
+    "Recon-PortScan.pcap.csv": "Recon",
+    "SqlInjection.pcap.csv": "Web-based",
+    "XSS.pcap.csv": "Web-based",
+}
+LINE_ENDING = "\r\n"
 
 
 def load_capped(path: Path, cap: int, seed: int) -> pd.DataFrame:
@@ -33,43 +37,55 @@ def load_capped(path: Path, cap: int, seed: int) -> pd.DataFrame:
     return df
 
 
-def main():
+def assemble(data_dir: Path) -> pd.DataFrame:
+    """The shuffled table with Label, source and family columns. Raises if an input file is missing."""
+    missing = [f for f in [BENIGN_FILE, *MALICIOUS_FILES] if not (data_dir / f).exists()]
+    if missing:
+        raise FileNotFoundError(f"missing input file(s) in {data_dir}: {missing}")
+
     print(f"Loading benign: {BENIGN_FILE}")
-    benign_df = pd.read_csv(DATA_DIR / BENIGN_FILE)
-    benign_df["Label"] = 0
-    print(f"  {len(benign_df)} rows")
+    benign = pd.read_csv(data_dir / BENIGN_FILE)
+    benign["Label"], benign["source"], benign["family"] = 0, BENIGN_FILE, "Benign"
+    print(f"  {len(benign)} rows")
 
-    malicious_parts = []
-    for fname in MALICIOUS_FILES:
-        path = DATA_DIR / fname
-        if not path.exists():
-            print(f"  WARNING: {fname} not found, skipping")
-            continue
-        df = load_capped(path, MAX_ROWS_PER_MALICIOUS_FILE, SEED)
-        df["Label"] = 1
+    parts = []
+    for fname, family in MALICIOUS_FILES.items():
+        df = load_capped(data_dir / fname, MAX_ROWS_PER_MALICIOUS_FILE, SEED)
+        df["Label"], df["source"], df["family"] = 1, fname, family
         print(f"  {fname}: using {len(df)} rows")
-        malicious_parts.append(df)
+        parts.append(df)
 
-    malicious_df = pd.concat(malicious_parts, ignore_index=True)
-    print(f"Total malicious rows: {len(malicious_df)}")
+    full = pd.concat([benign, *parts], ignore_index=True)
+    print(f"Total malicious rows: {sum(len(p) for p in parts)}")
 
-    full_df = pd.concat([benign_df, malicious_df], ignore_index=True)
+    numeric_cols = full.select_dtypes(include=[np.number]).columns
+    full[numeric_cols] = full[numeric_cols].replace([np.inf, -np.inf], np.nan)
+    before = len(full)
+    full = full.dropna(subset=numeric_cols)
+    print(f"Dropped {before - len(full)} rows containing inf/NaN values")
+    full = full.sample(frac=1, random_state=SEED).reset_index(drop=True)
+    print(f"Final dataset: {len(full)} rows "
+          f"({(full['Label'] == 0).sum()} benign, {(full['Label'] == 1).sum()} malicious)")
+    return full
 
-    numeric_cols = full_df.select_dtypes(include=[np.number]).columns
-    full_df[numeric_cols] = full_df[numeric_cols].replace([np.inf, -np.inf], np.nan)
 
-    before = len(full_df)
-    full_df = full_df.dropna(subset=numeric_cols)
-    after = len(full_df)
-    print(f"Dropped {before - after} rows containing inf/NaN values")
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--data-dir", type=Path, default=HERE)
+    ap.add_argument("--out-dir", type=Path, default=HERE)
+    args = ap.parse_args()
 
-    full_df = full_df.sample(frac=1, random_state=SEED).reset_index(drop=True)
+    full = assemble(args.data_dir)
+    args.out_dir.mkdir(parents=True, exist_ok=True)
+    dataset = args.out_dir / "dataset.csv"
+    full.drop(columns=["source", "family"]).to_csv(dataset, index=False, lineterminator=LINE_ENDING)
+    full[["source", "family"]].to_csv(args.out_dir / "dataset_sources.csv", index=False, lineterminator="\n")
+    print(f"Saved {dataset} and dataset_sources.csv")
 
-    print(f"Final dataset: {len(full_df)} rows "
-          f"({(full_df['Label']==0).sum()} benign, {(full_df['Label']==1).sum()} malicious)")
-
-    full_df.to_csv(OUTPUT_PATH, index=False)
-    print(f"Saved to {OUTPUT_PATH}")
+    got, pinned = sha256_file(dataset), read_pinned(HERE / "dataset.sha256")
+    if got != pinned:
+        sys.exit(f"SHA-256 {got} does not match the pinned {pinned}; this is not the reported dataset.")
+    print("SHA-256 matches data/dataset.sha256")
 
 
 if __name__ == "__main__":

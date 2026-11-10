@@ -11,7 +11,7 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
       - name: Lint (byte-compile)
-        run: python -m py_compile src/*.py tests/*.py
+        run: python -m compileall -q src tests tools data/build_dataset.py data/download_dataset.py report/make_report_assets.py
       - name: Smoke tests
         run: python -m pytest -q
       - name: Download dataset

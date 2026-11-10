@@ -1,18 +1,19 @@
-"""Smoke tests: the pipeline runs and produces sane metrics."""
+"""Smoke tests: the loader and metrics behave on the synthetic source."""
 import numpy as np
 from src.data import load_data
 from src.evaluate import compute_metrics
 
 CFG = {
     "seed": 0,
-    "data": {"source": "synthetic", "n_samples": 400, "n_features": 10, "test_size": 0.25},
+    "data": {"source": "synthetic", "n_samples": 400, "n_features": 10,
+             "split": {"strategy": "random", "val_size": 0.2, "test_size": 0.2}},
 }
 
 
 def test_load_data_shapes():
-    Xtr, Xte, ytr, yte = load_data(CFG)
-    assert Xtr.shape[1] == Xte.shape[1] == 10
-    assert len(ytr) == 300 and len(yte) == 100
+    s = load_data(CFG)
+    assert s.X_train.shape[1] == s.X_val.shape[1] == s.X_test.shape[1] == 10
+    assert (len(s.y_train), len(s.y_val), len(s.y_test)) == (240, 80, 80)
 
 
 def test_metrics_range():

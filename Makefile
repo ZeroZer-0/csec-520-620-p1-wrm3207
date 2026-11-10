@@ -7,9 +7,9 @@ PY := $(VENV)/bin/python
 
 help:
 	@echo "make setup      - create .venv and install requirements"
-	@echo "make data       - download the assembled dataset into data/"
+	@echo "make data       - fetch data/dataset.csv if missing, and verify it against data/dataset.sha256"
 	@echo "make reproduce  - train + evaluate, writing results/ (THE grading command)"
-	@echo "make test       - run smoke tests"
+	@echo "make test       - run the test suite"
 	@echo "make lint       - byte-compile check (stdlib only)"
 	@echo "make clean      - remove generated results"
 
@@ -29,7 +29,7 @@ test:
 	$(PY) -m pytest -q
 
 lint:
-	$(PY) -m py_compile src/*.py tests/*.py
+	$(PY) -m compileall -q src tests tools data/build_dataset.py data/download_dataset.py
 
 clean:
-	rm -f results/*.png results/*.json results/*.pt
+	rm -f results/*.png results/*.json results/*.pt results/*.npz

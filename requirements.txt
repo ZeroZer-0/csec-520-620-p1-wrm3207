@@ -7,6 +7,5 @@ scikit-learn
 matplotlib
 pyyaml
 torch
-keras           # Keras 3 — run it on the existing PyTorch backend (KERAS_BACKEND=torch)
 pytest
-gdown
+gdown           # only used by data/download_dataset.py when the dataset is not already in place
